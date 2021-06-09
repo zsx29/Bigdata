@@ -5,46 +5,83 @@
 """
 
 from selenium import webdriver
+import logging, time
 
-# 가상브라우저 실행
-browser = webdriver.Chrome("./chromedriver.exe")
+# 로거생성(log기록을 보면서 error를 잡는다)
+logger = logging.getLogger("movie_logger")
+logger.setLevel(logging.INFO)
 
-# 페이지 이동
-browser.get("https://movie.naver.com/")
+# 로그포멧
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-# 영화랭킹 클릭
-btn_ranking = browser.find_element_by_css_selector("#scrollbar > div.scrollbar-box > div > div > ul > li:nth-child(3) > a")
-btn_ranking.click()
+# 핸들러 생성
+fileHandler = logging.FileHandler("review.log")
+fileHandler.setLevel(logging.INFO)
+fileHandler.setFormatter(formatter)
+logger.addHandler(fileHandler)
 
-# 평점순(모든영화) 클릭
-btn_score = browser.find_element_by_css_selector("#old_content > div.tab_type_6 > ul > li:nth-child(3) > a")
-btn_score.click()
+# 가상브라우저 실행(headless 모드로 실행 )
+chrome_options = webdriver.ChromeOptions()
+chrome_options.add_argument("--headless")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+browser = webdriver.Chrome("./chromedriver.exe", options=chrome_options)
+logger.info("가상 브라우저 실행...")
 
-# 평점 1위 클릭
-btn_titles = browser.find_elements_by_css_selector("#old_content > table > tbody > tr > td.title > div > a")
-btn_titles[0].click()
-
-# 영화 평점 클릭
-menu_score = browser.find_element_by_css_selector("#movieEndTabMenu > li:nth-child(5) > a")
-menu_score.click()
-
-# 현재 가상 브라우저를 영화리뷰가 있는 Iframe으로 전환
-browser.switch_to.frame("pointAfterListIframe")
+page = 1
+rank = 0
 
 while True:
-    # 영화 리뷰 출력
-    lis = browser.find_elements_by_css_selector("body > div > div > div.score_result > ul > li")
-    for li in lis:
-        score = li.find_element_by_css_selector("div.star_score > em").text
-        reple = li.find_element_by_css_selector("div.score_reple > p > span:last-child").text
+    # 현재 브라우저를 전환
+    browser.switch_to.default_content()
 
-        print("{},{}".format(score, reple))
+    # 페이지 이동
+    if page > 40:
+        break
+    browser.get("https://movie.naver.com/movie/sdb/rank/rmovie.nhn?sel=pnt&page=%d" % page)
+    logger.info("%d 페이지 이동..." % page)
 
-    # 다음 페이지 클릭
-    btn_next = browser.find_element_by_css_selector("body > div > div > div.paging > div > a:last-child")
-    btn_next.click()
+    if rank > 49:  # 그린북 한번씩 더 출력되는거
+        rank = 0
+        page += 1
 
-print("영화 리뷰 수집완료...")
+    # 순위별 영화 클릭
+    btn_titles = browser.find_elements_by_css_selector("#old_content > table > tbody > tr > td.title > div > a")
+    btn_titles[rank].click()
+    rank += 1
+
+    # 영화 제목
+    movie_title = browser.find_element_by_css_selector("#content > div.article > div.wide_info_area > div.mv_info > h3 > a").text
+    logger.info("%d위 %s 영화 클릭..." % (rank, movie_title))
+
+    # 영화 평점 클릭
+    menu_score = browser.find_element_by_css_selector("#movieEndTabMenu > li > a.tab05")
+    menu_score.click()
+
+    # 현재 가상 브라우저를 영화리뷰가 있는 Iframe으로 전환
+    browser.switch_to.frame("pointAfterListIframe")
+
+    while True:
+        # 영화 리뷰 출력
+        lis = browser.find_elements_by_css_selector("body > div > div > div.score_result > ul > li")
+        for li in lis:
+            score = li.find_element_by_css_selector("div.star_score > em").text
+            reple = li.find_element_by_css_selector("div.score_reple > p > span:last-child").text
+
+            print("{},{}".format(score, reple))  # 저장
+
+        # 다음 페이지 클릭
+        try:
+            btn_next = browser.find_element_by_css_selector("body > div > div > div.paging > div > a:last-child > em")
+            btn_next.click()
+            logger.info("다음 페이지 클릭...")
+        except:
+            break
+
+    logger.info("%s 영화 리뷰 수집완료..." % movie_title)
+
+
+
 
 
 
