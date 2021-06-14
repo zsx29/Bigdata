@@ -4,15 +4,27 @@
     내용 : 영화 평점리뷰 크롤링 실습하기
 """
 
+# 패키지 선언
 from selenium import webdriver
 import logging, time
+from pymongo import MongoClient as mongo
+from datetime import datetime
 
 # 로거생성(log기록을 보면서 error를 잡는다)
 logger = logging.getLogger("movie_logger")
 logger.setLevel(logging.INFO)
 
-# 로그포멧
+# 로그 포멧 설정
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+# MongoDB 접속
+# 1단계 - mongoDB 접속
+conn = mongo('mongodb://admin:1234@192.168.100.102:27017')
+# 2단계 - DB 선택
+db = conn.get_database('movie')
+# 3단계 - Collection 선택
+collection = db.get_collection('review')
+
 
 # 핸들러 생성
 fileHandler = logging.FileHandler("review.log")
@@ -51,7 +63,7 @@ while True:
     rank += 1
 
     # 영화 제목
-    movie_title = browser.find_element_by_css_selector("#content > div.article > div.wide_info_area > div.mv_info > h3 > a").text
+    movie_title = browser.find_element_by_css_selector('#content > div.article > div.mv_info_area > div.mv_info > h3 > a').text
     logger.info("%d위 %s 영화 클릭..." % (rank, movie_title))
 
     # 영화 평점 클릭
@@ -68,7 +80,10 @@ while True:
             score = li.find_element_by_css_selector("div.star_score > em").text
             reple = li.find_element_by_css_selector("div.score_reple > p > span:last-child").text
 
-            print("{},{}".format(score, reple))  # 저장
+            # print("{},{}".format(score, reple))  # 저장
+
+            # MongoDB - 4단계 - 쿼리 실행
+            collection.insert_one({'title': movie_title, 'score': score, 'reple': reple, 'rdate': datetime.now()})
 
         # 다음 페이지 클릭
         try:
@@ -80,6 +95,11 @@ while True:
 
     logger.info("%s 영화 리뷰 수집완료..." % movie_title)
 
+# MongoDB - 5단계 - mongodb 종료
+conn.close()
+
+# 가상브라우저 종료
+browser.close()
 
 
 
